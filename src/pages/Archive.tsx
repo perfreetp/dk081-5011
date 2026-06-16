@@ -1,4 +1,5 @@
-import { useParams } from 'react-router-dom'
+import { useState, useCallback } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useStore } from '@/store'
 import {
   Sparkles,
@@ -13,15 +14,16 @@ import {
   Wrench,
   Tag,
   CheckCircle,
-  AlertTriangle,
   Truck,
   Eye,
   User,
   Ruler,
   Camera,
   Calendar,
+  X,
+  Copy,
 } from 'lucide-react'
-import type { DamageReport } from '@/types'
+import type { BookingOrder, DamageReport } from '@/types'
 
 const priceBars = [
   { label: '购入', pct: 60 },
@@ -37,8 +39,18 @@ const RESPONSIBILITY_LABEL: Record<string, { text: string; cls: string }> = {
 
 export default function Archive() {
   const { id } = useParams<{ id: string }>()
-  const { getFurnitureById, getOrderByFurnitureId, damageReports } = useStore()
+  const [searchParams] = useSearchParams()
+  const { getFurnitureById, getOrderById, getOrderByFurnitureId, damageReports } = useStore()
   const furniture = getFurnitureById(id!)
+  const [showShare, setShowShare] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const orderIdFromUrl = searchParams.get('order')
+  const order = orderIdFromUrl
+    ? getOrderById(orderIdFromUrl)
+    : furniture
+      ? getOrderByFurnitureId(furniture.id)
+      : undefined
 
   if (!furniture) {
     return (
@@ -48,7 +60,6 @@ export default function Archive() {
     )
   }
 
-  const order = getOrderByFurnitureId(furniture.id)
   const relatedDamageReports = order
     ? damageReports.filter((r: DamageReport) => r.orderId === order.id)
     : []
@@ -62,6 +73,65 @@ export default function Archive() {
 
   const serviceLabel = order?.serviceType === 'deliver_then_install' ? '先送后装' : '到货验品再装'
   const timeSlotLabel = order?.timeSlot === 'morning' ? '上午 8:00-12:00' : '下午 13:00-18:00'
+
+  const buildShareText = () => {
+    const lines: string[] = []
+    lines.push(`【居雅送装 · 家具档案】`)
+    lines.push(``)
+    lines.push(`📦 ${furniture.name}`)
+    lines.push(`材质：${furniture.material}`)
+    lines.push(`品相：${condition}`)
+    lines.push(`来源：${source}`)
+    lines.push(``)
+    if (order) {
+      lines.push(`── 送装履历 ──`)
+      lines.push(`预约时间：${order.dateSlot} ${timeSlotLabel}`)
+      lines.push(`服务方式：${serviceLabel}`)
+      if (order.addOns.whiteGlove) lines.push(`增值服务：白手套服务`)
+      if (order.addOns.takeOld) lines.push(`增值服务：旧家具带走`)
+      lines.push(`安装师傅：${order.installer.name}（★${order.installer.rating} / ${order.installer.yearsExperience}年经验）`)
+      lines.push(`擅长：${order.installer.specialties.join('、')}`)
+      if (order.entryCheckResult) {
+        lines.push(`入户检测：${order.entryCheckResult.text}`)
+      }
+      if (relatedDamageReports.length > 0) {
+        lines.push(`磕碰记录（${relatedDamageReports.length}条）：`)
+        relatedDamageReports.forEach((r) => {
+          const resp = RESPONSIBILITY_LABEL[r.responsibility]
+          lines.push(`  - [${resp.text}] ${r.description}`)
+        })
+      } else {
+        lines.push(`磕碰记录：无`)
+      }
+      if (order.deliveredAt) lines.push(`送达时间：${formatDate(order.deliveredAt)}`)
+      if (order.completedAt) lines.push(`完成时间：${formatDate(order.completedAt)}`)
+      lines.push(`服务费用：¥${order.totalFee.toLocaleString()}`)
+      lines.push(``)
+    }
+    lines.push(`── 保养建议 ──`)
+    careTips.forEach((t) => lines.push(`· ${t}`))
+    lines.push(``)
+    lines.push(`── 转卖建议 ──`)
+    lines.push(`参考价格：¥${fmt(low)} - ¥${fmt(high)}`)
+    lines.push(resaleSuggestion.bestTiming)
+    return lines.join('\n')
+  }
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(buildShareText()).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => {
+      const ta = document.createElement('textarea')
+      ta.value = buildShareText()
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [furniture, order, relatedDamageReports])
 
   return (
     <div className="min-h-screen bg-cream pb-28">
@@ -281,9 +351,33 @@ export default function Archive() {
         </div>
       </div>
 
+      {showShare && (
+        <div className="fixed inset-0 bg-charcoal/50 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowShare(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-cream-dark">
+              <h3 className="font-serif text-lg font-semibold text-charcoal">分享档案</h3>
+              <button onClick={() => setShowShare(false)} className="p-1 -mr-1 text-charcoal-light"><X size={20} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <pre className="whitespace-pre-wrap text-sm text-charcoal leading-relaxed font-sans bg-cream-50 rounded-xl p-4 border border-cream-dark">
+                {buildShareText()}
+              </pre>
+            </div>
+            <div className="px-5 py-4 border-t border-cream-dark flex gap-3">
+              <button onClick={() => setShowShare(false)} className="flex-1 py-3 rounded-xl border-2 border-cream-dark text-charcoal font-medium text-sm">关闭</button>
+              <button onClick={handleCopy} className={`flex-1 py-3 rounded-xl font-medium text-sm flex items-center justify-center gap-1.5 transition-all ${
+                copied ? 'bg-sage text-white' : 'bg-walnut text-white'
+              }`}>
+                {copied ? <><CheckCircle className="w-4 h-4" />已复制</> : <><Copy className="w-4 h-4" />复制文本</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="fixed bottom-0 left-0 right-0 bg-cream/90 backdrop-blur-sm border-t border-cream-dark">
         <div className="max-w-lg mx-auto px-4 py-4 flex gap-3">
-          <button className="flex-1 py-3 rounded-2xl border-2 border-walnut text-walnut font-medium text-sm flex items-center justify-center gap-1.5">
+          <button onClick={() => setShowShare(true)} className="flex-1 py-3 rounded-2xl border-2 border-walnut text-walnut font-medium text-sm flex items-center justify-center gap-1.5">
             <BookOpen className="w-4 h-4" />
             分享档案
           </button>

@@ -51,8 +51,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   getOrderById: (id) => get().orders.find((o) => o.id === id),
 
-  getOrderByFurnitureId: (furnitureId) =>
-    get().orders.find((o) => o.furnitureId === furnitureId),
+  getOrderByFurnitureId: (furnitureId) => {
+    const matches = get().orders.filter((o) => o.furnitureId === furnitureId)
+    return matches.length > 0 ? matches[matches.length - 1] : undefined
+  },
 
   getLatestOrder: () => {
     const orders = get().orders

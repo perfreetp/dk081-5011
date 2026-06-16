@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '@/store'
+import type { BookingOrder } from '@/types'
 import { MapPin, Phone, Star, Clock, Truck, Camera, CheckCircle, AlertTriangle, ChevronRight, Navigation, Timer, User, Check, X, PackageOpen } from 'lucide-react'
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -137,12 +138,27 @@ export default function Tracking() {
     setShowUpload(false)
   }
 
-  const handleConfirmDelivered = () => {
-    updateOrder(order.id, { status: 'installing', deliveredAt: new Date().toISOString() })
+  const advanceStatus = () => {
+    const next: Record<string, { status: BookingOrder['status']; field?: string; value?: string }> = {
+      pending: { status: 'preparing' },
+      preparing: { status: 'in_transit' },
+      in_transit: { status: 'arriving' },
+      arriving: { status: 'installing', field: 'deliveredAt', value: new Date().toISOString() },
+      installing: { status: 'completed', field: 'completedAt', value: new Date().toISOString() },
+    }
+    const step = next[order.status]
+    if (!step) return
+    const updates: Partial<BookingOrder> = { status: step.status }
+    if (step.field && step.value) (updates as Record<string, string>)[step.field] = step.value
+    updateOrder(order.id, updates)
   }
 
-  const handleConfirmInstalled = () => {
-    updateOrder(order.id, { status: 'completed', completedAt: new Date().toISOString() })
+  const NEXT_ACTION: Record<string, { label: string; icon: typeof Truck; bg: string }> = {
+    pending: { label: '确认接单', icon: Check, bg: 'bg-walnut' },
+    preparing: { label: '确认发货', icon: Truck, bg: 'bg-walnut' },
+    in_transit: { label: '确认已到达', icon: MapPin, bg: 'bg-walnut' },
+    arriving: { label: '确认已送达', icon: PackageOpen, bg: 'bg-walnut' },
+    installing: { label: '确认安装完成', icon: CheckCircle, bg: 'bg-sage' },
   }
 
   const isCompleted = order.status === 'completed'
@@ -395,25 +411,20 @@ export default function Tracking() {
 
       <div className="fixed bottom-0 left-0 right-0 bg-cream/90 backdrop-blur-sm px-5 py-4 border-t border-cream-dark">
         {isCompleted ? (
-          <Link to={`/archive/${furniture?.id}`} className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-walnut text-cream font-medium shadow-warm">
+          <Link to={`/archive/${furniture?.id}?order=${order.id}`} className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-walnut text-cream font-medium shadow-warm">
             查看家具档案
             <ChevronRight className="w-4 h-4" />
           </Link>
-        ) : order.status === 'installing' ? (
-          <button onClick={handleConfirmInstalled} className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-sage text-white font-medium shadow-warm">
-            <CheckCircle className="w-4 h-4" />
-            确认安装完成
-          </button>
-        ) : order.status === 'arriving' ? (
-          <button onClick={handleConfirmDelivered} className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-walnut text-cream font-medium shadow-warm">
-            <PackageOpen className="w-4 h-4" />
-            确认已送达
-          </button>
         ) : (
-          <Link to={`/archive/${furniture?.id}`} className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-walnut/80 text-cream font-medium">
-            查看家具档案
-            <ChevronRight className="w-4 h-4" />
-          </Link>
+          <button onClick={advanceStatus} className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-medium shadow-warm ${NEXT_ACTION[order.status]?.bg || 'bg-walnut'}`}>
+            {(() => {
+              const action = NEXT_ACTION[order.status]
+              if (!action) return null
+              const Icon = action.icon
+              return <Icon className="w-4 h-4" />
+            })()}
+            {NEXT_ACTION[order.status]?.label || '下一步'}
+          </button>
         )}
       </div>
     </div>
