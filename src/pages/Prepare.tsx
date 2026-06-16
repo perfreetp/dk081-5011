@@ -33,7 +33,8 @@ export default function Prepare() {
   const [elevH, setElevH] = useState('')
   const [corrW, setCorrW] = useState('')
   const [doorW, setDoorW] = useState('')
-  const [result, setResult] = useState<{ type: 'pass' | 'warn' | 'fail'; text: string } | null>(null)
+  const [turnSpace, setTurnSpace] = useState('')
+  const [result, setResult] = useState<{ type: 'pass' | 'warn' | 'fail'; text: string; details?: string[] } | null>(null)
   const [checked, setChecked] = useState<boolean[]>(new Array(CHECKLIST.length).fill(false))
 
   if (!order || !furniture) {
@@ -51,15 +52,92 @@ export default function Prepare() {
   const progress = Math.round((doneCount / CHECKLIST.length) * 100)
 
   const handleCheck = () => {
-    const ew = Number(elevW), eh = Number(elevH), dw = Number(doorW)
-    if (!ew || !eh) return
-    if (ew >= dim.width && eh >= dim.height) {
-      setResult({ type: 'pass', text: '✓ 可通过电梯入户' })
-    } else if (dw && dw >= dim.width) {
-      setResult({ type: 'warn', text: '△ 可能需要走楼梯或吊装' })
-    } else {
-      setResult({ type: 'fail', text: '✗ 建议选择吊装服务' })
+    const ew = Number(elevW)
+    const eh = Number(elevH)
+    const cw = Number(corrW)
+    const dw = Number(doorW)
+    const ts = Number(turnSpace)
+
+    const needsElevator = ew && eh
+    const needsCorridor = cw
+    const needsDoor = dw
+    if (!needsElevator || !needsCorridor || !needsDoor) {
+      setResult({ type: 'warn', text: '请填写完整后再检测', details: ['电梯宽/高、走廊宽度、入户门宽度为必填项'] })
+      return
     }
+
+    const passDetails: string[] = []
+    const warnDetails: string[] = []
+    const failDetails: string[] = []
+
+    const fW = dim.width
+    const fH = dim.height
+    const fL = dim.length
+
+    // 1. 电梯判定（家具需要能在电梯里转身，取宽和高的较大者比较）
+    const maxCross = Math.max(fW, fH)
+    const minElevClearance = 15
+    if (ew >= maxCross + minElevClearance && eh >= fH + minElevClearance) {
+      passDetails.push(`✓ 电梯可容纳（净空 ${ew}×${eh}cm ≥ 家具 ${maxCross}×${fH}cm）`)
+    } else if (ew >= fW + 5 && eh >= fH + 5) {
+      warnDetails.push(`△ 电梯空间勉强（建议拆包或立起搬运）`)
+    } else {
+      failDetails.push(`✗ 电梯过小（需至少 ${maxCross + minElevClearance}×${fH + minElevClearance}cm 净空）`)
+    }
+
+    // 2. 走廊判定（直线通过：宽度需 ≥ 家具宽度 + 20cm 余量）
+    const minCorridor = fW + 20
+    if (cw >= minCorridor) {
+      passDetails.push(`✓ 走廊畅通（${cw}cm ≥ 家具宽度 ${fW}cm + 余量 20cm）`)
+    } else if (cw >= fW + 5) {
+      warnDetails.push(`△ 走廊偏窄（${cw}cm，需侧搬或专人指挥）`)
+    } else {
+      failDetails.push(`✗ 走廊过窄（至少需要 ${minCorridor}cm 才能通过）`)
+    }
+
+    // 3. 转角空间判定（家具为长条形时必须有足够转角，取 length 和 width 的对角线判断）
+    if (ts) {
+      const diagonal = Math.round(Math.sqrt(fL * fL + fW * fW))
+      if (ts >= diagonal) {
+        passDetails.push(`✓ 转角空间充足（${ts}cm ≥ 对角线 ${diagonal}cm）`)
+      } else if (ts >= Math.max(fL, fW) + 10) {
+        warnDetails.push(`△ 转角空间紧凑（建议拆包后斜搬通过）`)
+      } else {
+        failDetails.push(`✗ 转角空间不足（家具对角线约 ${diagonal}cm）`)
+      }
+    } else if (fL > 150 || fW > 90) {
+      warnDetails.push('△ 未填转角空间，大件家具建议核实是否有L型转角')
+    }
+
+    // 4. 入户门判定
+    const minDoor = fW + 8
+    if (dw >= minDoor) {
+      passDetails.push(`✓ 入户门可通过（${dw}cm ≥ 家具宽度 ${fW}cm + 8cm 余量）`)
+    } else if (dw >= fW - 2) {
+      warnDetails.push(`△ 入户门勉强（建议拆下门挡或拆家具外包）`)
+    } else {
+      failDetails.push(`✗ 入户门过窄（至少需要 ${minDoor}cm）`)
+    }
+
+    // 综合结论
+    const failCount = failDetails.length
+    const warnCount = warnDetails.length
+    const allDetails = [...failDetails, ...warnDetails, ...passDetails]
+
+    let finalType: 'pass' | 'warn' | 'fail'
+    let finalText: string
+    if (failCount > 0) {
+      finalType = 'fail'
+      finalText = '✗ 入户风险较高，建议联系客服安排吊装或拆装方案'
+    } else if (warnCount > 0) {
+      finalType = 'warn'
+      finalText = '△ 可入户但需注意：搬运过程请预留人手，必要时拆包侧搬'
+    } else {
+      finalType = 'pass'
+      finalText = '✓ 可顺利入户，所有通道满足搬运要求'
+    }
+
+    setResult({ type: finalType, text: finalText, details: allDetails })
   }
 
   const resultColor = result
@@ -113,19 +191,23 @@ export default function Prepare() {
             { label: '电梯高度', value: elevH, set: setElevH },
             { label: '走廊宽度', value: corrW, set: setCorrW },
             { label: '入户门宽度', value: doorW, set: setDoorW },
-          ].map((f) => (
-            <label key={f.label} className="flex items-center gap-1.5 bg-cream rounded-xl px-3 py-2.5">
-              <Ruler className="w-3.5 h-3.5 text-walnut shrink-0" />
-              <input
-                type="number"
-                value={f.value}
-                onChange={(e) => f.set(e.target.value)}
-                placeholder={f.label}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-charcoal-300 min-w-0"
-              />
-              <span className="text-xs text-charcoal-light shrink-0">cm</span>
-            </label>
-          ))}
+            { label: '转角空间', value: turnSpace, set: setTurnSpace, full: true },
+          ].map((f) => {
+            const cls = (f as { full?: boolean }).full ? 'col-span-2' : ''
+            return (
+              <label key={f.label} className={`flex items-center gap-1.5 bg-cream rounded-xl px-3 py-2.5 ${cls}`}>
+                <Ruler className="w-3.5 h-3.5 text-walnut shrink-0" />
+                <input
+                  type="number"
+                  value={f.value}
+                  onChange={(e) => f.set(e.target.value)}
+                  placeholder={f.label + (f.label === '转角空间' ? '(选填)' : '')}
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-charcoal-300 min-w-0"
+                />
+                <span className="text-xs text-charcoal-light shrink-0">cm</span>
+              </label>
+            )
+          })}
         </div>
         <button
           onClick={handleCheck}
@@ -134,8 +216,15 @@ export default function Prepare() {
           检测结果
         </button>
         {result && (
-          <div className={`rounded-xl border px-4 py-3 text-sm font-medium text-center animate-fade-in ${resultColor}`}>
-            {result.text}
+          <div className={`rounded-xl border px-4 py-3 space-y-2 animate-fade-in ${resultColor}`}>
+            <p className="text-sm font-medium">{result.text}</p>
+            {result.details && result.details.length > 0 && (
+              <ul className="space-y-0.5 pt-1 border-t border-current/20">
+                {result.details.map((d, i) => (
+                  <li key={i} className="text-[11px] opacity-90">{d}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </section>

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '@/store'
 import { Calendar, Clock, Check, ChevronLeft, ChevronRight, Shield, HandMetal, Truck, Package, Eye } from 'lucide-react'
 
@@ -24,12 +24,19 @@ function generateDays(count: number) {
 export default function Booking() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { getFurnitureById, createOrder } = useStore()
   const furniture = getFurnitureById(id!)
 
+  const paramService = searchParams.get('service') as 'deliver_then_install' | 'inspect_then_install' | null
+  const initialService =
+    paramService === 'deliver_then_install' || paramService === 'inspect_then_install'
+      ? paramService
+      : 'deliver_then_install'
+
   const [selectedDate, setSelectedDate] = useState(1)
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<'morning' | 'afternoon' | null>(null)
-  const [serviceType, setServiceType] = useState<'deliver_then_install' | 'inspect_then_install'>('deliver_then_install')
+  const [serviceType, setServiceType] = useState<'deliver_then_install' | 'inspect_then_install'>(initialService)
   const [whiteGlove, setWhiteGlove] = useState(false)
   const [takeOld, setTakeOld] = useState(false)
 
