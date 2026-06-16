@@ -32,6 +32,9 @@ export interface BookingOrder {
   elevatorChecked: boolean
   corridorChecked: boolean
   preparationDone: boolean
+  entryCheckResult?: { type: 'pass' | 'warn' | 'fail'; text: string; details?: string[] }
+  deliveredAt?: string
+  completedAt?: string
 }
 
 export interface Installer {

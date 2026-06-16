@@ -23,7 +23,7 @@ const CHECKLIST = [
 export default function Prepare() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { getOrderById, getFurnitureById } = useStore()
+  const { getOrderById, getFurnitureById, updateOrder } = useStore()
 
   const order = getOrderById(id!)
   const furniture = order ? getFurnitureById(order.furnitureId) : undefined
@@ -138,6 +138,9 @@ export default function Prepare() {
     }
 
     setResult({ type: finalType, text: finalText, details: allDetails })
+    if (order) {
+      updateOrder(order.id, { entryCheckResult: { type: finalType, text: finalText, details: allDetails } })
+    }
   }
 
   const resultColor = result

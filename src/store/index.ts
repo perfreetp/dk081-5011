@@ -2,6 +2,23 @@ import { create } from 'zustand'
 import type { Furniture, BookingOrder, DamageReport } from '@/types'
 import { mockFurniture, mockOrders, mockDamageReports } from '@/data/mock'
 
+const STORAGE_KEY_ORDERS = 'juya_orders'
+const STORAGE_KEY_DAMAGE = 'juya_damage'
+
+function loadFromStorage<T>(key: string, fallback: T[]): T[] {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw) return JSON.parse(raw) as T[]
+  } catch {}
+  return fallback
+}
+
+function saveToStorage<T>(key: string, data: T[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data))
+  } catch {}
+}
+
 interface AppState {
   furnitureList: Furniture[]
   orders: BookingOrder[]
@@ -14,6 +31,7 @@ interface AppState {
   getFurnitureById: (id: string) => Furniture | undefined
   getOrderById: (id: string) => BookingOrder | undefined
   getOrderByFurnitureId: (furnitureId: string) => BookingOrder | undefined
+  getLatestOrder: () => BookingOrder | undefined
   createOrder: (order: BookingOrder) => void
   updateOrder: (id: string, updates: Partial<BookingOrder>) => void
   addDamageReport: (report: DamageReport) => void
@@ -21,8 +39,8 @@ interface AppState {
 
 export const useStore = create<AppState>((set, get) => ({
   furnitureList: mockFurniture,
-  orders: mockOrders,
-  damageReports: mockDamageReports,
+  orders: loadFromStorage<BookingOrder>(STORAGE_KEY_ORDERS, mockOrders),
+  damageReports: loadFromStorage<DamageReport>(STORAGE_KEY_DAMAGE, mockDamageReports),
   selectedCategory: 'all',
   searchQuery: '',
 
@@ -36,13 +54,29 @@ export const useStore = create<AppState>((set, get) => ({
   getOrderByFurnitureId: (furnitureId) =>
     get().orders.find((o) => o.furnitureId === furnitureId),
 
-  createOrder: (order) => set((state) => ({ orders: [...state.orders, order] })),
+  getLatestOrder: () => {
+    const orders = get().orders
+    return orders.length > 0 ? orders[orders.length - 1] : undefined
+  },
+
+  createOrder: (order) =>
+    set((state) => {
+      const orders = [...state.orders, order]
+      saveToStorage(STORAGE_KEY_ORDERS, orders)
+      return { orders }
+    }),
 
   updateOrder: (id, updates) =>
-    set((state) => ({
-      orders: state.orders.map((o) => (o.id === id ? { ...o, ...updates } : o)),
-    })),
+    set((state) => {
+      const orders = state.orders.map((o) => (o.id === id ? { ...o, ...updates } : o))
+      saveToStorage(STORAGE_KEY_ORDERS, orders)
+      return { orders }
+    }),
 
   addDamageReport: (report) =>
-    set((state) => ({ damageReports: [...state.damageReports, report] })),
+    set((state) => {
+      const damageReports = [...state.damageReports, report]
+      saveToStorage(STORAGE_KEY_DAMAGE, damageReports)
+      return { damageReports }
+    }),
 }))

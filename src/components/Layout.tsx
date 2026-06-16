@@ -1,16 +1,19 @@
 import { Link, useLocation } from 'react-router-dom'
 import { Home, Calendar, ClipboardCheck, MapPin, Archive, ArrowLeft } from 'lucide-react'
-
-const navItems = [
-  { path: '/', label: '精选', icon: Home },
-  { path: '/booking/order-1', label: '预约', icon: Calendar },
-  { path: '/prepare/order-2', label: '准备', icon: ClipboardCheck },
-  { path: '/tracking/order-1', label: '追踪', icon: MapPin },
-  { path: '/archive/fur-1', label: '档案', icon: Archive },
-]
+import { useStore } from '@/store'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
+  const { getLatestOrder } = useStore()
+  const latest = getLatestOrder()
+
+  const navItems = [
+    { path: '/', label: '精选', icon: Home, matchPrefix: false },
+    { path: latest ? `/booking/${latest.furnitureId}` : '/', label: '预约', icon: Calendar, matchPrefix: '/booking' },
+    { path: latest ? `/prepare/${latest.id}` : '/', label: '准备', icon: ClipboardCheck, matchPrefix: '/prepare' },
+    { path: latest ? `/tracking/${latest.id}` : '/', label: '追踪', icon: MapPin, matchPrefix: '/tracking' },
+    { path: latest ? `/archive/${latest.furnitureId}` : '/', label: '档案', icon: Archive, matchPrefix: '/archive' },
+  ]
 
   return (
     <div className="min-h-screen bg-cream flex flex-col">
@@ -49,14 +52,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-cream-dark lg:hidden">
         <div className="max-w-[1200px] mx-auto flex items-center justify-around h-16">
           {navItems.map((item) => {
-            const isActive =
-              item.path === '/'
-                ? location.pathname === '/'
-                : location.pathname.startsWith(item.path)
+            const isActive = item.matchPrefix === false
+              ? location.pathname === '/'
+              : typeof item.matchPrefix === 'string'
+                ? location.pathname.startsWith(item.matchPrefix)
+                : false
             const Icon = item.icon
             return (
               <Link
-                key={item.path}
+                key={item.label}
                 to={item.path}
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-all ${
                   isActive
